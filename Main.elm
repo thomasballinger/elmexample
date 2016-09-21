@@ -17,58 +17,93 @@ main =
 
 type alias Model =
     { ecosystem : List (List Bool)
+    , leftToRandomize : Int
     }
+
+
+rows =
+    4
+
+
+columns =
+    4
 
 
 init : ( Model, Cmd Msg )
 init =
-    ( Model
-        [ [ False, False, False, False ]
-        , [ False, False, False, False ]
-        , [ False, False, False, False ]
-        , [ False, False, False, False ]
-        ]
+    ( { ecosystem =
+            [ [ False, False, False, False ]
+            , [ False, False, False, False ]
+            , [ False, False, False, False ]
+            , [ False, False, False, False ]
+            ]
+      , leftToRandomize = 0
+      }
     , Cmd.none
     )
 
 
 type Msg
     = RandomizeBoard
-    | ChangeCellTo Bool
+    | ChangeNextCellTo Bool
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         RandomizeBoard ->
-            ( model
-            , Random.generate ChangeCellTo Random.bool
+            ( { model | leftToRandomize = rows * columns - 1 }
+            , Random.generate ChangeNextCellTo Random.bool
             )
 
-        ChangeCellTo on ->
-            ( { model | ecosystem = ecoWithFirstSpot model.ecosystem on }
-            , Cmd.none
-            )
+        ChangeNextCellTo on ->
+            let
+                row =
+                    model.leftToRandomize // 4
+
+                col =
+                    model.leftToRandomize % 4
+            in
+                ( { model
+                    | ecosystem = ecoWithSpot row col on model.ecosystem
+                    , leftToRandomize = (model.leftToRandomize - 1)
+                  }
+                , if model.leftToRandomize > 0 then
+                    Random.generate ChangeNextCellTo Random.bool
+                  else
+                    Cmd.none
+                )
 
 
-ecoWithFirstSpot : List (List Bool) -> Bool -> List (List Bool)
-ecoWithFirstSpot ecosystem on =
+ecoWithSpot : Int -> Int -> Bool -> List (List Bool) -> List (List Bool)
+ecoWithSpot row col on ecosystem =
     case ecosystem of
         [] ->
             []
 
-        firstRow :: restOfTheRows ->
-            case firstRow of
-                [] ->
-                    [] :: restOfTheRows
+        firstRow :: restOfRows ->
+            if row > 0 then
+                firstRow :: (ecoWithSpot (row - 1) col on restOfRows)
+            else
+                case firstRow of
+                    [] ->
+                        [] :: restOfRows
 
-                firstCell :: restOfCells ->
-                    (on :: restOfCells) :: restOfTheRows
+                    firstCell :: restOfCells ->
+                        if col > 0 then
+                            case ecoWithSpot row (col - 1) on (restOfCells :: restOfRows) of
+                                [] ->
+                                    []
+
+                                changedRow :: _ ->
+                                    (firstCell :: changedRow) :: restOfRows
+                        else
+                            (on :: restOfCells) :: restOfRows
 
 
 view : Model -> Html Msg
 view model =
     div []
         [ h1 [] [ text (toString model.ecosystem) ]
-        , button [ onClick RandomizeBoard ] [ text "Randomize first spot on board" ]
+        , button [ onClick RandomizeBoard ] [ text "Randomize entire board" ]
         ]
